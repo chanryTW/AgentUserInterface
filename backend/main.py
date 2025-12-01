@@ -3,7 +3,11 @@ from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 import json
 import asyncio
-import random
+import os
+import google.generativeai as genai
+from dotenv import load_dotenv
+
+load_dotenv()
 
 app = FastAPI()
 
@@ -15,84 +19,90 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Configure Gemini
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+if GEMINI_API_KEY:
+    genai.configure(api_key=GEMINI_API_KEY)
+    model = genai.GenerativeModel('gemini-2.5-flash')
+else:
+    print("WARNING: GEMINI_API_KEY not found in environment variables.")
+    model = None
+
+SYSTEM_PROMPT = """
+You are an AI assistant capable of generating dynamic UI components.
+You communicate using the AG-UI protocol.
+Your response MUST be a stream of JSON objects, separated by newlines.
+Each JSON object represents an event.
+
+Supported Events:
+1. Message: { "type": "message", "role": "assistant", "content": "text content" }
+2. Update UI: { "type": "update_ui", "component": "component_name", "props": { ... } }
+
+Supported Components:
+- 'table': props { headers: string[], data: string[][] }
+- 'form': props { title: string, fields: { name: string, label: string, type: string }[] }
+- 'card': props { title: string, description: string, imageUrl?: string }
+
+Rules:
+- If the user asks for data that fits a table, send a 'message' introducing it, then an 'update_ui' with component='table'.
+- If the user needs to input data, send a 'message' then 'update_ui' with component='form'.
+- If the user asks for a profile or summary, send 'update_ui' with component='card'.
+- Otherwise, just send 'message' events.
+- ALWAYS output valid JSON on each line. Do not wrap in markdown code blocks.
+"""
+
 @app.get("/")
 async def root():
     return {"message": "AG-UI Backend is running"}
 
 async def event_generator(user_message: str):
-    # Simulate processing time
-    await asyncio.sleep(0.5)
-    
-    # 1. Send a text message response
-    yield json.dumps({
-        "type": "message",
-        "role": "assistant",
-        "content": f"I received your request: '{user_message}'. Let me find the best UI for you."
-    }) + "\n"
-    
-    await asyncio.sleep(1)
+    if not model:
+        yield json.dumps({
+            "type": "message",
+            "role": "assistant",
+            "content": "Error: GEMINI_API_KEY not configured. Please check backend/.env file."
+        }) + "\n"
+        return
 
-    # 2. Decide which UI to show based on keywords
-    user_message_lower = user_message.lower()
-    
-    if "table" in user_message_lower:
-        yield json.dumps({
-            "type": "message",
-            "role": "assistant",
-            "content": "Here is the data in a table format:"
-        }) + "\n"
-        yield json.dumps({
-            "type": "update_ui",
-            "component": "table",
-            "props": {
-                "headers": ["Name", "Role", "Status"],
-                "data": [
-                    ["Alice", "Engineer", "Active"],
-                    ["Bob", "Designer", "Away"],
-                    ["Charlie", "Manager", "Active"]
-                ]
-            }
-        }) + "\n"
+    try:
+        # Construct the prompt
+        prompt = f"{SYSTEM_PROMPT}\n\nUser: {user_message}\nAssistant:"
         
-    elif "form" in user_message_lower:
-        yield json.dumps({
-            "type": "message",
-            "role": "assistant",
-            "content": "Please fill out this form:"
-        }) + "\n"
-        yield json.dumps({
-            "type": "update_ui",
-            "component": "form",
-            "props": {
-                "title": "User Registration",
-                "fields": [
-                    {"name": "username", "label": "Username", "type": "text"},
-                    {"name": "email", "label": "Email", "type": "email"}
-                ]
-            }
-        }) + "\n"
+        response = model.generate_content(prompt, stream=True)
         
-    elif "card" in user_message_lower:
+        for chunk in response:
+            if chunk.text:
+                # Gemini might return multiple lines or partial JSON. 
+                # For simplicity in this demo, we assume Gemini follows instructions 
+                # and outputs line-delimited JSON or we treat text as message.
+                # However, raw text from Gemini might not be perfect JSON lines if not strictly enforced.
+                # To make it robust, we'll try to parse lines, or wrap plain text in message event.
+                
+                text_chunk = chunk.text
+                lines = text_chunk.strip().split('\n')
+                
+                for line in lines:
+                    line = line.strip()
+                    if not line: continue
+                    
+                    try:
+                        # Try to parse as JSON to validate
+                        json.loads(line)
+                        yield line + "\n"
+                    except json.JSONDecodeError:
+                        # If not JSON, wrap it as a message
+                        # This handles cases where Gemini might be chatty
+                        yield json.dumps({
+                            "type": "message",
+                            "role": "assistant",
+                            "content": line
+                        }) + "\n"
+                        
+    except Exception as e:
         yield json.dumps({
             "type": "message",
             "role": "assistant",
-            "content": "Here is the user profile:"
-        }) + "\n"
-        yield json.dumps({
-            "type": "update_ui",
-            "component": "card",
-            "props": {
-                "title": "Alice Johnson",
-                "description": "Senior Software Engineer",
-                "imageUrl": "https://api.dicebear.com/7.x/avataaars/svg?seed=Alice"
-            }
-        }) + "\n"
-        
-    else:
-        yield json.dumps({
-            "type": "message",
-            "role": "assistant",
-            "content": "I can show you a 'table', 'form', or 'card'. Just ask!"
+            "content": f"Error generating response: {str(e)}"
         }) + "\n"
 
 @app.post("/agent")

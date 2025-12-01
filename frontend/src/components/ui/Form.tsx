@@ -13,31 +13,31 @@ interface FormProps {
 
 export const Form: React.FC<FormProps> = ({ title, fields }) => {
     return (
-        <div className="w-full max-w-xs border p-4 rounded-lg shadow-sm bg-white">
-            <h2 className="text-lg font-bold mb-4">{title}</h2>
-            <form className="bg-white rounded px-8 pt-6 pb-8 mb-4">
+        <div className="w-full max-w-md bg-white p-8 rounded-2xl shadow-xl border border-gray-100">
+            <h2 className="text-2xl font-bold mb-6 text-gray-800 border-b pb-4">{title}</h2>
+            <form className="space-y-5">
                 {fields.map((field, index) => (
-                    <div key={index} className="mb-4">
+                    <div key={index}>
                         <label
-                            className="block text-gray-700 text-sm font-bold mb-2"
+                            className="block text-gray-700 text-sm font-semibold mb-2"
                             htmlFor={field.name}
                         >
                             {field.label}
                         </label>
                         <input
-                            className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                            className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all duration-200 text-gray-700 bg-gray-50 focus:bg-white"
                             id={field.name}
                             type={field.type}
-                            placeholder={field.label}
+                            placeholder={`Enter ${field.label.toLowerCase()}`}
                         />
                     </div>
                 ))}
-                <div className="flex items-center justify-between">
+                <div className="pt-4">
                     <button
-                        className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
+                        className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg shadow-md hover:shadow-lg transform active:scale-95 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                         type="button"
                     >
-                        Submit
+                        Submit Application
                     </button>
                 </div>
             </form>
