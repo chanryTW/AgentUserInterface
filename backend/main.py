@@ -48,12 +48,20 @@ Rules:
 - If the user needs to input data, send a 'message' then 'update_ui' with component='form'.
 - If the user asks for a profile or summary, send 'update_ui' with component='card'.
 - Otherwise, just send 'message' events.
-- ALWAYS output valid JSON on each line. Do not wrap in markdown code blocks.
+- **CRITICAL: Output strictly valid JSON lines. DO NOT use markdown code blocks (```json).**
+- **CRITICAL: Do not pretty-print JSON. Each JSON object must be on a single line.**
+- **IMPORTANT: ALWAYS respond in Traditional Chinese (繁體中文).**
 """
 
 @app.get("/")
 async def root():
     return {"message": "AG-UI Backend is running"}
+
+import re
+
+# ... (imports)
+
+# ... (system prompt)
 
 async def event_generator(user_message: str):
     if not model:
@@ -70,33 +78,99 @@ async def event_generator(user_message: str):
         
         response = model.generate_content(prompt, stream=True)
         
+        buffer = ""
+        
         for chunk in response:
             if chunk.text:
-                # Gemini might return multiple lines or partial JSON. 
-                # For simplicity in this demo, we assume Gemini follows instructions 
-                # and outputs line-delimited JSON or we treat text as message.
-                # However, raw text from Gemini might not be perfect JSON lines if not strictly enforced.
-                # To make it robust, we'll try to parse lines, or wrap plain text in message event.
-                
                 text_chunk = chunk.text
-                lines = text_chunk.strip().split('\n')
+                # Simple cleanup
+                text_chunk = text_chunk.replace("```json", "").replace("```", "")
                 
-                for line in lines:
+                buffer += text_chunk
+                
+                while "\n" in buffer:
+                    line, buffer = buffer.split("\n", 1)
                     line = line.strip()
                     if not line: continue
                     
+                    # Try to parse the whole line as JSON first
                     try:
-                        # Try to parse as JSON to validate
                         json.loads(line)
                         yield line + "\n"
+                        continue
                     except json.JSONDecodeError:
-                        # If not JSON, wrap it as a message
-                        # This handles cases where Gemini might be chatty
-                        yield json.dumps({
-                            "type": "message",
-                            "role": "assistant",
-                            "content": line
-                        }) + "\n"
+                        pass
+                    
+                    # If failed, try to find JSON object in the line using regex
+                    # Look for { "type": ... } pattern
+                    json_match = re.search(r'(\{.*"type"\s*:\s*"(?:message|update_ui)".*\})', line)
+                    if json_match:
+                        json_str = json_match.group(1)
+                        try:
+                            # Validate the extracted JSON
+                            json.loads(json_str)
+                            
+                            # If there was text BEFORE the JSON, send it as a message
+                            pre_text = line[:json_match.start()].strip()
+                            if pre_text:
+                                yield json.dumps({
+                                    "type": "message",
+                                    "role": "assistant",
+                                    "content": pre_text
+                                }) + "\n"
+                                
+                            # Send the JSON event
+                            yield json_str + "\n"
+                            
+                            # If there was text AFTER the JSON, send it as a message (or process next)
+                            post_text = line[json_match.end():].strip()
+                            if post_text:
+                                yield json.dumps({
+                                    "type": "message",
+                                    "role": "assistant",
+                                    "content": post_text
+                                }) + "\n"
+                            
+                            continue
+                        except json.JSONDecodeError:
+                            pass
+                    
+                    # If still no valid JSON found, treat the whole line as a message
+                    yield json.dumps({
+                        "type": "message",
+                        "role": "assistant",
+                        "content": line
+                    }) + "\n"
+        
+        # Process remaining buffer
+        if buffer.strip():
+             # Same logic for buffer
+             line = buffer.strip()
+             try:
+                json.loads(line)
+                yield line + "\n"
+             except:
+                 # Regex check for buffer
+                json_match = re.search(r'(\{.*"type"\s*:\s*"(?:message|update_ui)".*\})', line)
+                if json_match:
+                    json_str = json_match.group(1)
+                    try:
+                        json.loads(json_str)
+                        pre_text = line[:json_match.start()].strip()
+                        if pre_text:
+                            yield json.dumps({"type": "message", "role": "assistant", "content": pre_text}) + "\n"
+                        yield json_str + "\n"
+                        post_text = line[json_match.end():].strip()
+                        if post_text:
+                            yield json.dumps({"type": "message", "role": "assistant", "content": post_text}) + "\n"
+                    except:
+                        yield json.dumps({"type": "message", "role": "assistant", "content": line}) + "\n"
+                else:
+                    yield json.dumps({
+                        "type": "message",
+                        "role": "assistant",
+                        "content": line
+                    }) + "\n"
                         
     except Exception as e:
         yield json.dumps({
