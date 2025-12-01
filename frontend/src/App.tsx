@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { connectAGUI, AGUIEvent } from './lib/ag-ui';
+import { connectAGUI, type AGUIEvent } from './lib/ag-ui';
 import { DynamicRenderer } from './components/registry';
 
 interface Message {
@@ -70,8 +70,8 @@ function App() {
             <div
               key={idx}
               className={`p-3 rounded-lg max-w-[85%] ${msg.role === 'user'
-                  ? 'bg-blue-500 text-white self-end ml-auto'
-                  : 'bg-gray-200 text-gray-800 self-start'
+                ? 'bg-blue-500 text-white self-end ml-auto'
+                : 'bg-gray-200 text-gray-800 self-start'
                 }`}
             >
               {msg.content}
