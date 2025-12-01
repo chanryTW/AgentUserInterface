@@ -42,11 +42,17 @@ Supported Components:
 - 'table': props { headers: string[], data: string[][] }
 - 'form': props { title: string, fields: { name: string, label: string, type: string }[] }
 - 'card': props { title: string, description: string, imageUrl?: string }
+- 'chart': props { title: string, type: 'bar'|'line'|'pie', data: { [key: string]: number|string }[], dataKey: string, categoryKey: string }
+- 'steps': props { items: { title: string, description: string, status: 'completed'|'current'|'pending' }[] }
+- 'stats': props { items: { label: string, value: string, change?: string, trend?: 'up'|'down'|'neutral' }[] }
 
 Rules:
 - If the user asks for data that fits a table, send a 'message' introducing it, then an 'update_ui' with component='table'.
 - If the user needs to input data, send a 'message' then 'update_ui' with component='form'.
 - If the user asks for a profile or summary, send 'update_ui' with component='card'.
+- If the user asks for trends, statistics, or comparisons that are best visualized, send 'update_ui' with component='chart'.
+- If the user asks for a process, itinerary, or plan, send 'update_ui' with component='steps'.
+- If the user asks for key metrics or a dashboard summary, send 'update_ui' with component='stats'.
 - Otherwise, just send 'message' events.
 - **CRITICAL: Output strictly valid JSON lines. DO NOT use markdown code blocks (```json).**
 - **CRITICAL: Do not pretty-print JSON. Each JSON object must be on a single line.**

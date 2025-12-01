@@ -1,5 +1,7 @@
 # AG-UI Demo 專案 (Agentic User Interface)
 
+![Demo Screenshot](demo.png)
+
 這是一個展示 AG-UI (Agentic User Interface) 概念的 Demo 專案。
 它演示了如何讓 AI Agent (Gemini) 根據對話內容，動態決定並渲染最適合的前端 UI 元件（如表格、表單、卡片等），而不僅僅是輸出文字。
 
